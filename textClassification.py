@@ -6,7 +6,6 @@ import string
 import scipy
 from scipy import sparse
 from sklearn import svm
-e
 import random
 
 with open('train.txt', encoding="latin-1") as file:
