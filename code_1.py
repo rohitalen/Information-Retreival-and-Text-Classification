@@ -63,7 +63,7 @@ def calculate_dcg(relevance_grades, k):
 def get_ideal_relevance(k, query_id):
     """Generates an ideal relevance grade distribution for a query."""
     ideal_grades = [rel[1] for rel in query_relevance[query_id]]
-    ideal_grades.extend([0] * (k - len(ideal_grades)))  # Fill with zeros if less than k
+    ideal_grades.extend([0] * (k - len(ideal_grades)))
     return sorted(ideal_grades, reverse=True)[:k]
 
 def EVAL():
