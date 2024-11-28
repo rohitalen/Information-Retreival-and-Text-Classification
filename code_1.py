@@ -1,18 +1,18 @@
 import pandas as pd
 import numpy as np
 import re
-from gensim.corpora.dictionary import Dictionary
-from gensim.models import LdaModel
+from gensim.corpora.dictionary import Dictionary # type: ignore
+from gensim.models import LdaModel # type: ignore
 from nltk.stem import PorterStemmer
 # Dictionaries to store system results and relevance judgments
 system_results = {}
 query_relevance = {}
 corpus_data = {}
 stemmer = PorterStemmer()
-ST = []
+stop_words = []
 with open('stop_words.txt', 'r', encoding='UTF-8-sig') as f:
     for line in f:
-        ST.append(line.replace('\n', ''))
+        stop_words.append(line.replace('\n', ''))
 f.close()
 
 def load_data():
@@ -158,7 +158,7 @@ def EVAL():
     results_df.to_csv("ir_eval.csv", index=False)
 
 def processText(text):
-    result = [stemmer.stem(word) for word in re.findall(r'\w+', text) if word.lower() not in ST]
+    result = [stemmer.stem(word) for word in re.findall(r'\w+', text) if word.lower() not in stop_words]
     return result
 
 

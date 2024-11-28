@@ -44,7 +44,7 @@ stopwordlist = ['a', 'about', 'above', 'after', 'again', 'ain', 'all', 'am', 'an
 def tokenize_and_clean(content, stopwords, stemmer):
     #chars_to_remove = re.compile(f'[{string.punctuation}]')
     #remPunc = chars_to_remove.sub('',content)
-    #remURL = re.sub('((www.[^s]+)|(https?://[^s]+))',' ',remPunc)
+    #remURL = re.sub('((www.[^s]+)|(https?://[^s]+))',' ',content)
     final_tokens = tokenizer.tokenize(content.lower())
     stemmed_tokens = [stemmer.stem(token) for token in final_tokens]
     return stemmed_tokens
@@ -175,39 +175,43 @@ def convert_to_tfidf_matrix(preprocessed_data, word2id):
 
     return tfidf_matrix
 
-def CalAcc(y_pred, y_true, system, split):
-    f = open("classification.csv", "a")
-    if system == 'baseline' and split == 'train':
-        hdr = "system,split,p-pos,r-pos,f-pos,p-neg,r-neg,f-neg,p-neu,r-neu,f-neu,p-macro,r-macro,f-macro\n"
-        f.write(hdr)
+def calculate_scores(predicted_labels, true_labels, model_name, dataset_split):
+    with open("classification.csv", "a") as output_file:
+        if model_name == 'baseline' and dataset_split == 'train':
+            header = "model,dataset_split,precision-pos,recall-pos,f1-pos,precision-neg,recall-neg,f1-neg,precision-neu,recall-neu,f1-neu,precision-macro,recall-macro,f1-macro\n"
+            output_file.write(header)
 
-    dfpred = pd.DataFrame(y_pred)
-    dftrue = pd.DataFrame(y_true)
-    labels = [0, 1, 2]
-    precision = []
-    recall = []
-    F1 = []
+        df_predicted = pd.DataFrame(predicted_labels)
+        df_true = pd.DataFrame(true_labels)
+        class_labels = [0, 1, 2]
+        precisions = []
+        recalls = []
+        f1_scores = []
 
-    for label in labels:
-        pred = dfpred[dfpred[0] == label]
-        index_pred = pred.index.tolist()
-        true = dftrue[dftrue[0] == label]
-        index_true = dftrue.reindex(index=index_pred)
+        for label in class_labels:
+            predicted_subset = df_predicted[df_predicted[0] == label]
+            predicted_indices = predicted_subset.index.tolist()
+            true_subset = df_true[df_true[0] == label]
+            true_indices_subset = df_true.reindex(index=predicted_indices)
 
-        precision.append(sum(np.array(pred) == np.array(index_true)) / len(pred))
-        recall.append(sum(np.array(pred) == np.array(index_true)) / len(true))
-        F1.append(2*precision[label]*recall[label] / (precision[label]+recall[label]))
+            precisions.append(sum(np.array(predicted_subset) == np.array(true_indices_subset)) / len(predicted_subset))
+            recalls.append(sum(np.array(predicted_subset) == np.array(true_indices_subset)) / len(true_subset))
+            f1_scores.append(2 * precisions[label] * recalls[label] / (precisions[label] + recalls[label]))
 
-    macro_P = np.mean(precision)
-    macro_R = np.mean(recall)
-    macro_F1 = 2*macro_P*macro_R / (macro_P+macro_R)
+        macro_precision = np.mean(precisions)
+        macro_recall = np.mean(recalls)
+        macro_f1 = 2 * macro_precision * macro_recall / (macro_precision + macro_recall)
 
-    line = system+','+split+','+"{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n".format(precision[0][0], recall[0][0], F1[0][0], precision[1][0], recall[1][0], F1[1][0], precision[2][0], recall[2][0], F1[2][0], macro_P, macro_R, macro_F1)
-    f.write(line)
+        result_line = model_name + ',' + dataset_split + ',' + \
+                      "{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n".format(
+                          precisions[0][0], recalls[0][0], f1_scores[0][0],
+                          precisions[1][0], recalls[1][0], f1_scores[1][0],
+                          precisions[2][0], recalls[2][0], f1_scores[2][0],
+                          macro_precision, macro_recall, macro_f1)
+        output_file.write(result_line)
 
 
-def baseLine():
-
+def baseLine_model():
     preprocessed_training_data, training_categories, train_vocab = preprocess_data(training_data,'baseline')
     preprocessed_test_data, test_categories, test_vocab = preprocess_data(test_data,'baseline')
 
@@ -232,12 +236,20 @@ def baseLine():
     ytrn_pred = model.predict(X_train)
     ydev_pred = model.predict(X_dev)
     ytest_pred = model.predict(X_test)
-    print(compute_accuracy(ytest_pred,y_test),'baseline')
-    CalAcc(ytrn_pred, y_train, 'baseline', 'train')
-    CalAcc(ydev_pred, y_dev, 'baseline', 'dev')
-    CalAcc(ytest_pred, y_test, 'baseline', 'test')
 
-def improved():
+    misclassified_count = 0
+    print('Misclassified Instances')
+    for index in range(len(ydev_pred)):
+        if ydev_pred[index] != y_dev[index] and misclassified_count < 3:
+            print(ydev_pred[index], y_dev[index], X_dev[index])
+            misclassified_count += 1
+    
+    print(compute_accuracy(ytest_pred,y_test),'baseline')
+    calculate_scores(ytrn_pred, y_train, 'baseline', 'train')
+    calculate_scores(ydev_pred, y_dev, 'baseline', 'dev')
+    calculate_scores(ytest_pred, y_test, 'baseline', 'test')
+
+def improved_model():
     
     preprocessed_training_data, training_categories, train_vocab = preprocess_data(training_data,'improved')
     preprocessed_test_data, test_categories, test_vocab = preprocess_data(test_data,'improved')
@@ -263,10 +275,11 @@ def improved():
     ytrn_pred = model.predict(X_train)
     ydev_pred = model.predict(X_dev)
     ytest_pred = model.predict(X_test)
+
     print(compute_accuracy(ytest_pred,y_test),'improved')
-    CalAcc(ytrn_pred, y_train, 'improved', 'train')
-    CalAcc(ydev_pred, y_dev, 'improved', 'dev')
-    CalAcc(ytest_pred, y_test, 'improved', 'test')
+    calculate_scores(ytrn_pred, y_train, 'improved', 'train')
+    calculate_scores(ydev_pred, y_dev, 'improved', 'dev')
+    calculate_scores(ytest_pred, y_test, 'improved', 'test')
 
 def compute_accuracy(predictions, true_values):
     num_correct = 0
@@ -276,8 +289,8 @@ def compute_accuracy(predictions, true_values):
             num_correct += 1
     return num_correct / num_total
 
-#baseLine()
-#improved()
+baseLine_model()
+improved_model()
 
 '''
 tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
@@ -374,3 +387,67 @@ print(f"Test Accuracy: {accuracy}")
 #Accuracy
 #0.5669240669240669 baseline
 #0.6271986271986272 improved
+# 3 instances
+
+'''
+2 0   (0, 253)  1.0
+  (0, 976)      1.0
+  (0, 1034)     1.0
+  (0, 2441)     1.0
+  (0, 4959)     1.0
+  (0, 8163)     1.0
+  (0, 11303)    1.0
+  (0, 13085)    1.0
+  (0, 17967)    1.0
+  (0, 20445)    1.0
+  (0, 21360)    1.0
+  (0, 22651)    1.0
+  (0, 26988)    1.0
+  (0, 30379)    1.0
+  (0, 31131)    1.0
+  (0, 31735)    1.0
+  (0, 32234)    1.0
+  (0, 33099)    2.0
+1 0   (0, 1034) 1.0
+  (0, 3013)     1.0
+  (0, 3052)     1.0
+  (0, 3911)     1.0
+  (0, 4895)     1.0
+  (0, 4959)     1.0
+  (0, 7808)     3.0
+  (0, 9887)     1.0
+  (0, 10021)    1.0
+  (0, 12064)    1.0
+  (0, 12505)    1.0
+  (0, 13096)    1.0
+  (0, 14111)    1.0
+  (0, 16520)    1.0
+  (0, 23522)    1.0
+  (0, 24646)    1.0
+  (0, 26893)    1.0
+  (0, 27238)    1.0
+  (0, 31131)    1.0
+  (0, 31490)    1.0
+  (0, 31735)    1.0
+  (0, 33099)    2.0
+2 0   (0, 1018) 1.0
+  (0, 1034)     1.0
+  (0, 2096)     2.0
+  (0, 3013)     1.0
+  (0, 5143)     1.0
+  (0, 8832)     1.0
+  (0, 9755)     1.0
+  (0, 10021)    1.0
+  (0, 16485)    1.0
+  (0, 19304)    1.0
+  (0, 19371)    1.0
+  (0, 22107)    1.0
+  (0, 24884)    1.0
+  (0, 27636)    1.0
+  (0, 29018)    2.0
+  (0, 29281)    1.0
+  (0, 30618)    1.0
+  (0, 31131)    1.0
+  (0, 31495)    1.0
+  (0, 33099)    3.0
+'''
